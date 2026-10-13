@@ -21,3 +21,5 @@ tenderlens/
 
 Python 3.12
 Debian slim
+
+docker compose run --rm tenderlens python -m pytest
