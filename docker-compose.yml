@@ -4,4 +4,3 @@ services:
     container_name: tenderlens-dev
     volumes:
       - .:/app
-    command: python src/main.py
