@@ -1,3 +1,5 @@
 pymupdf
 pydantic
 pytest
+openai
+azure-identity

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 def extract_pages(pdf_path: str | Path) -> list[dict]:
@@ -9,7 +9,7 @@ def extract_pages(pdf_path: str | Path) -> list[dict]:
     if not pdf_path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
-    document = fitz.open(pdf_path)
+    document = pymupdf.open(pdf_path)
 
     pages = []
 
