@@ -35,6 +35,7 @@ dist/
 
 # Logs
 *.log
+RememberMe.md
 
 # Local data / generated outputs
 data/raw/
