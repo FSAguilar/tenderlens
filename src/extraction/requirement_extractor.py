@@ -5,6 +5,7 @@ from src.models.requirement import (
     LLMExtractionResult,
     Requirement,
 )
+import re
 SYSTEM_PROMPT = """
 You extract procurement requirements from tender documents.
 
@@ -106,7 +107,43 @@ Do not use Other merely because requirement_type is EvaluationCriterion.
 - Compliance with procurement or contract terms and conditions should be categorized as
   Administrative unless the source refers to a specific legal, statutory, regulatory,
   licensing, liability, or legal compliance obligation.
+
+  GRANULARITY RULES:
+- Extract requirements at the smallest meaningful actionable level.
+- When a parent statement only introduces a list of required items, extract the
+  individual items and do not also extract the parent as a separate requirement.
+- Keep the parent only when it contains an additional independent obligation
+  not fully represented by the child items.
+- Do not merge distinct obligations merely because they appear in the same section.
 """
+
+def normalize_evidence(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"[^\w\s]", "", text)
+
+    return text.strip()
+
+
+def deduplicate_requirements(
+    requirements: list[Requirement],
+) -> list[Requirement]:
+    unique_requirements = []
+    seen = set()
+
+    for requirement in requirements:
+        key = (
+            requirement.pdf_page,
+            normalize_evidence(requirement.evidence_text),
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        unique_requirements.append(requirement)
+
+    return unique_requirements
 
 def build_paginated_text(pages: list[dict]) -> str:
     sections = []
@@ -213,3 +250,109 @@ def extract_with_llm(paginated_text: str) -> LLMExtractionResult:
         )
 
     return message.parsed
+
+def chunk_pages(
+    pages: list[dict],
+    chunk_size: int = 2,
+    overlap: int = 0,
+) -> list[list[dict]]:
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than 0")
+
+    if overlap < 0:
+        raise ValueError("overlap cannot be negative")
+
+    if overlap >= chunk_size:
+        raise ValueError("overlap must be smaller than chunk_size")
+
+    chunks = []
+    step = chunk_size - overlap
+    start = 0
+
+    while start < len(pages):
+        chunk = pages[start:start + chunk_size]
+
+        if not chunk:
+            break
+
+        chunks.append(chunk)
+
+        if start + chunk_size >= len(pages):
+            break
+
+        start += step
+
+    return chunks
+
+def extract_requirements_from_document(
+    pages: list[dict],
+    tender_id: str,
+    document_id: str,
+    source_document: str,
+    chunk_size: int = 2,
+    overlap: int = 0,
+) -> ExtractionResult:
+    all_requirements = []
+
+    chunks = chunk_pages(
+        pages,
+        chunk_size=chunk_size,
+        overlap=overlap,
+    )
+
+    for chunk in chunks:
+        paginated_text = build_paginated_text(chunk)
+
+        llm_result = extract_with_llm(
+            paginated_text
+        )
+
+        partial_result = build_extraction_result(
+            extracted_requirements=llm_result.requirements,
+            tender_id=tender_id,
+            document_id=document_id,
+            source_document=source_document,
+        )
+
+        all_requirements.extend(
+            partial_result.requirements
+        )
+
+    all_requirements = assign_requirement_ids(
+        all_requirements
+    )
+
+    # print("Before deduplication:", len(all_requirements))
+
+    all_requirements = deduplicate_requirements(all_requirements)
+
+    # print("After deduplication:", len(all_requirements))
+
+    all_requirements = assign_requirement_ids(
+        all_requirements
+    )
+
+    return ExtractionResult(
+        document_id=document_id,
+        source_document=source_document,
+        requirements=all_requirements,
+    )
+
+def assign_requirement_ids(
+    requirements: list[Requirement],
+) -> list[Requirement]:
+    result = []
+
+    for index, requirement in enumerate(
+        requirements,
+        start=1,
+    ):
+        result.append(
+            requirement.model_copy(
+                update={
+                    "id": f"REQ-{index:03d}"
+                }
+            )
+        )
+
+    return result

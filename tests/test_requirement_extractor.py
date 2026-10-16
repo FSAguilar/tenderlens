@@ -1,17 +1,22 @@
 import pytest
 
 from src.extraction.requirement_extractor import (
+    assign_requirement_ids,
     build_extraction_result,
     build_paginated_text,
+    deduplicate_requirements,
     extract_requirements_from_pages,
+    extract_requirements_from_document,
+    chunk_pages
 )
 from unittest.mock import patch
 
 from src.models.requirement import (
     ExtractedRequirement,
     LLMExtractionResult,
+    Requirement,
 )
-
+from unittest.mock import patch
 
 
 def test_empty_pages_returns_empty_result():
@@ -131,3 +136,184 @@ def test_extract_requirements_from_pages():
     assert requirement.tender_id == "test_tender"
     assert requirement.category == "Technical"
     assert requirement.pdf_page == 1
+
+
+def test_chunk_pages():
+    pages = [
+        {"pdf_page": 1, "text": "Page 1"},
+        {"pdf_page": 2, "text": "Page 2"},
+        {"pdf_page": 3, "text": "Page 3"},
+        {"pdf_page": 4, "text": "Page 4"},
+        {"pdf_page": 5, "text": "Page 5"},
+    ]
+
+    chunks = chunk_pages(
+        pages,
+        chunk_size=2,
+    )
+
+    assert len(chunks) == 3
+
+    assert [
+        page["pdf_page"]
+        for page in chunks[0]
+    ] == [1, 2]
+
+    assert [
+        page["pdf_page"]
+        for page in chunks[1]
+    ] == [3, 4]
+
+    assert [
+        page["pdf_page"]
+        for page in chunks[2]
+    ] == [5]
+
+
+def test_assign_requirement_ids():
+    requirements = [
+        Requirement(
+            tender_id="test",
+            document_id="doc",
+            category="Technical",
+            requirement_type="Requirement",
+            description="A",
+            mandatory=True,
+            source_document="test.pdf",
+            pdf_page=1,
+            evidence_text="A",
+        ),
+        Requirement(
+            tender_id="test",
+            document_id="doc",
+            category="Technical",
+            requirement_type="Requirement",
+            description="B",
+            mandatory=True,
+            source_document="test.pdf",
+            pdf_page=2,
+            evidence_text="B",
+        ),
+    ]
+
+    result = assign_requirement_ids(
+        requirements
+    )
+
+    assert result[0].id == "REQ-001"
+    assert result[1].id == "REQ-002"
+
+def test_deduplicate_requirements():
+    requirement_a = Requirement(
+        tender_id="test",
+        document_id="doc",
+        category="Technical",
+        requirement_type="Requirement",
+        description="The system must support encryption.",
+        mandatory=True,
+        source_document="test.pdf",
+        pdf_page=2,
+        evidence_text="The system must support encryption.",
+    )
+
+    requirement_b = Requirement(
+        tender_id="test",
+        document_id="doc",
+        category="Technical",
+        requirement_type="Requirement",
+        description="The system must support encryption.",
+        mandatory=True,
+        source_document="test.pdf",
+        pdf_page=2,
+        evidence_text="THE SYSTEM must support encryption.",
+    )
+
+    result = deduplicate_requirements(
+        [requirement_a, requirement_b]
+    )
+
+    assert len(result) == 1
+
+
+
+
+def test_extract_requirements_from_document():
+    pages = [
+        {"pdf_page": 1, "text": "Page 1"},
+        {"pdf_page": 2, "text": "Page 2"},
+        {"pdf_page": 3, "text": "Page 3"},
+    ]
+
+    first_llm_result = LLMExtractionResult(
+        requirements=[
+            ExtractedRequirement(
+                category="Technical",
+                requirement_type="Requirement",
+                description="Requirement A",
+                mandatory=True,
+                pdf_page=1,
+                evidence_text="Requirement A",
+            )
+        ]
+    )
+
+    second_llm_result = LLMExtractionResult(
+        requirements=[
+            ExtractedRequirement(
+                category="Technical",
+                requirement_type="Requirement",
+                description="Requirement B",
+                mandatory=True,
+                pdf_page=3,
+                evidence_text="Requirement B",
+            )
+        ]
+    )
+
+    with patch(
+        "src.extraction.requirement_extractor.extract_with_llm",
+        side_effect=[
+            first_llm_result,
+            second_llm_result,
+        ],
+    ) as mocked_llm:
+        result = extract_requirements_from_document(
+            pages=pages,
+            tender_id="test_tender",
+            document_id="test_document",
+            source_document="test.pdf",
+            chunk_size=2,
+        )
+
+    assert mocked_llm.call_count == 2
+
+    assert len(result.requirements) == 2
+
+    assert result.requirements[0].id == "REQ-001"
+    assert result.requirements[1].id == "REQ-002"
+
+    assert result.requirements[0].description == "Requirement A"
+    assert result.requirements[1].description == "Requirement B"
+
+def test_chunk_pages_with_overlap():
+    pages = [
+        {"pdf_page": 1, "text": "Page 1"},
+        {"pdf_page": 2, "text": "Page 2"},
+        {"pdf_page": 3, "text": "Page 3"},
+        {"pdf_page": 4, "text": "Page 4"},
+    ]
+
+    chunks = chunk_pages(
+        pages,
+        chunk_size=2,
+        overlap=1,
+    )
+
+    assert [
+    [page["pdf_page"] for page in chunk]
+    for chunk in chunks
+] == [
+    [1, 2],
+    [2, 3],
+    [3, 4],
+]
