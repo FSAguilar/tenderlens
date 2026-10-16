@@ -41,6 +41,13 @@ def parse_args():
         help="Path where the evaluation JSON will be saved.",
     )
 
+    parser.add_argument(
+    "--pdf-page",
+    type=int,
+    default=None,
+    help="Evaluate only requirements from a specific physical PDF page.",
+)
+
     return parser.parse_args()
 
 def evidence_matches(gold_evidence: str, predicted_evidence: str) -> bool:
@@ -385,11 +392,35 @@ def get_unmatched_gold(
 
     # print(f"\nEvaluation saved to: {output_path}")
 
+def filter_by_pdf_page(
+    requirements: list[dict],
+    pdf_page: int | None,
+) -> list[dict]:
+    if pdf_page is None:
+        return requirements
+
+    return [
+        requirement
+        for requirement in requirements
+        if requirement["pdf_page"] == pdf_page
+    ]
+
 if __name__ == "__main__":
     args = parse_args()
 
     gold = load_requirements(args.gold)
     predictions = load_requirements(args.predictions)
+
+
+    gold = filter_by_pdf_page(
+        gold,
+        args.pdf_page,
+    )
+
+    predictions = filter_by_pdf_page(
+        predictions,
+        args.pdf_page,
+    )
 
     metrics = calculate_metrics(
         gold_requirements=gold,
@@ -486,3 +517,4 @@ if __name__ == "__main__":
     )
 
     print(f"\nEvaluation saved to: {output_path}")
+

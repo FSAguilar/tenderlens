@@ -73,19 +73,28 @@ PDF_PATH = "data/raw/RFP-2026-3-IT-SERVICES.pdf"
 pages = extract_pages(PDF_PATH)
 
 # Primera prueba multichunk: páginas físicas 1-4
-test_pages = pages
+test_pages = pages[3:4]
 
+# result = extract_requirements_from_document(
+#     pages=test_pages,
+#     tender_id="tender_KINGSBURY_IT",
+#     document_id="kingsbury_it_managed_services",
+#     source_document="RFP-2026-3-IT-SERVICES.pdf",
+#     chunk_size=2,
+#     overlap=1,
+# )
 result = extract_requirements_from_document(
     pages=test_pages,
     tender_id="tender_KINGSBURY_IT",
     document_id="kingsbury_it_managed_services",
     source_document="RFP-2026-3-IT-SERVICES.pdf",
     chunk_size=2,
-    overlap=1,
+    overlap=0,
 )
 
+
 output_path = Path(
-    "outputs/kingsbury_full_v0.1.json"
+    "outputs/kingsbury_page_4_current.json"
 )
 
 output_path.parent.mkdir(
