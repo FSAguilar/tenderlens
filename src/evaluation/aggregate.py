@@ -41,6 +41,8 @@ def aggregate_evaluations(evaluations: list[dict]) -> dict:
         ) / len(evaluations)
         for key in classification_keys
     }
+    
+    micro_detection = calculate_micro_detection(evaluations)
 
     return {
         "datasets": [
@@ -49,6 +51,7 @@ def aggregate_evaluations(evaluations: list[dict]) -> dict:
         ],
         "dataset_count": len(evaluations),
         "detection_macro_average": detection,
+        "detection_micro_average": micro_detection,
         "classification_macro_average": classification,
     }
 
@@ -72,6 +75,49 @@ def parse_args():
     )
 
     return parser.parse_args()
+
+def calculate_micro_detection(evaluations: list[dict]) -> dict:
+    true_positives = sum(
+        evaluation["detection"]["true_positives"]
+        for evaluation in evaluations
+    )
+
+    false_positives = sum(
+        evaluation["detection"]["false_positives"]
+        for evaluation in evaluations
+    )
+
+    false_negatives = sum(
+        evaluation["detection"]["false_negatives"]
+        for evaluation in evaluations
+    )
+
+    precision = (
+        true_positives / (true_positives + false_positives)
+        if true_positives + false_positives
+        else 0.0
+    )
+
+    recall = (
+        true_positives / (true_positives + false_negatives)
+        if true_positives + false_negatives
+        else 0.0
+    )
+
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if precision + recall
+        else 0.0
+    )
+
+    return {
+        "true_positives": true_positives,
+        "false_positives": false_positives,
+        "false_negatives": false_negatives,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+    }
 
 
 if __name__ == "__main__":
