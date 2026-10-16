@@ -53,3 +53,9 @@ nuestro código añade metadata
 Requirement
 
 python -c "from src.clients.azure_openai import get_azure_openai_client; print(get_azure_openai_client())"
+
+python -m src.evaluation.baseline \
+  --gold data/gold/exhaustive/snoqualmie_page_2_v0.1.json \
+  --predictions outputs/snoqualmie_page_2_baseline.json \
+  --dataset snoqualmie_page_2_v0.1 \
+  --output outputs/evaluations/snoqualmie_page_2_v0.1.json
